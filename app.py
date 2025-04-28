@@ -29,7 +29,7 @@ if gender:
 # Metrics
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Products", len(filtered_df))
-col3.metric("Total Available", filtered_df["Available Stock"].sum())
+col2.metric("Total Available", filtered_df["Available Stock"].sum())
 col3.metric("Total Sold", filtered_df["Sold Stock"].sum())
 col4.metric("Average Price", f"₹{filtered_df['Price'].mean():.2f}")
 
