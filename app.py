@@ -27,10 +27,11 @@ if gender:
     filtered_df = filtered_df[filtered_df["Gender"].isin(gender)]
 
 # Metrics
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total Products", len(filtered_df))
-col2.metric("Total Sold", filtered_df["Sold Stock"].sum())
-col3.metric("Average Price", f"₹{filtered_df['Price'].mean():.2f}")
+col3.metric("Total Available", filtered_df["Available Stock"].sum())
+col3.metric("Total Sold", filtered_df["Sold Stock"].sum())
+col4.metric("Average Price", f"₹{filtered_df['Price'].mean():.2f}")
 
 # ----------------------------
 # Restocking Prediction Section
