@@ -17,12 +17,16 @@ st.title("🛍️ Chennai Max Inventory Dashboard")
 # Sidebar Filters
 st.sidebar.header("Filter Options")
 category = st.sidebar.multiselect("Category", options=df["Category"].unique())
+Branch_Name = st.sidebar.multiselect("Branch Name", options=df["Branch Name"].unique())
 gender = st.sidebar.multiselect("Gender", options=df["Gender"].unique())
 
 # Apply filters
 filtered_df = df.copy()
 if category:
     filtered_df = filtered_df[filtered_df["Category"].isin(category)]
+if Branch_Name:
+    filtered_df = filtered_df[filtered_df["Branch Name"].isin(Branch_Name)]
+
 if gender:
     filtered_df = filtered_df[filtered_df["Gender"].isin(gender)]
 
