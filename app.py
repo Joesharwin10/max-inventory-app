@@ -1,97 +1,96 @@
-import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import train_test_split
-
-st.set_page_config(page_title="Max Inventory Dashboard", layout="wide")
-
-# Load and preprocess data
-@st.cache_data
-def load_data():
-    df = pd.read_csv("Max Showroom Data.csv")
-    df.dropna(subset=["Available Stock", "Sold Stock", "Total Items", "Target", "Price", "Restock Needed"], inplace=True)
-
-    # Normalize the Price column
-    scaler = MinMaxScaler()
-    df["Price"] = scaler.fit_transform(df[["Price"]])
-
-    return df
-
-df = load_data()
-
-# ----------------------------
-# Sidebar Filter Section
-# ----------------------------
-st.title("🛍️ Chennai Max Inventory Dashboard")
-
-st.sidebar.header("Filter Options")
-category = st.sidebar.multiselect("Category", options=df["Category"].unique())
-gender = st.sidebar.multiselect("Gender", options=df["Gender"].unique())
-
-filtered_df = df.copy()
-if category:
-    filtered_df = filtered_df[filtered_df["Category"].isin(category)]
-if gender:
-    filtered_df = filtered_df[filtered_df["Gender"].isin(gender)]
-
-# ----------------------------
-# Metrics
-# ----------------------------
-col1, col2, col3 = st.columns(3)
-col1.metric("Total Products", len(filtered_df))
-col2.metric("Total Sold", filtered_df["Sold Stock"].sum())
-col3.metric("Average Price", f"₹{filtered_df['Price'].mean():.2f}")
-
-# ----------------------------
-# Model Training (from notebook logic)
-# ----------------------------
-X = df[["Available Stock", "Sold Stock", "Total Items", "Target", "Price"]]
-y = df["Restock Needed"].apply(lambda x: 1 if x > 0 else 0)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-model = LogisticRegression(class_weight='balanced', random_state=42)
-model.fit(X_train, y_train)
-
-# ----------------------------
-# Restocking Predictor Section
-# ----------------------------
-st.markdown("---")
-st.header("📦 Restocking Predictor (ML Model)")
-
-col_a, col_b, col_c = st.columns(3)
-with col_a:
-    available_stock = st.number_input("Available Stock", min_value=0)
-with col_b:
-    sold_stock = st.number_input("Sold Stock", min_value=0)
-with col_c:
-    total_items = st.number_input("Total Items", min_value=0)
-
-target = 100  # default business target assumption
-price = df["Price"].mean()  # average normalized price
-
-if st.button("Predict Restocking Need"):
-    input_data = pd.DataFrame([[available_stock, sold_stock, total_items, target, price]],
-                              columns=["Available Stock", "Sold Stock", "Total Items", "Target", "Price"])
-    prediction = model.predict(input_data)[0]
-    restock_needed = "Yes" if prediction == 1 else "No"
-    color = "green" if prediction == 1 else "red"
-    st.markdown(f"### ✅ Restocking Status: <span style='color:{color}'>{restock_needed}</span>", unsafe_allow_html=True)
-
-# ----------------------------
-# Plot Section
-# ----------------------------
-st.subheader("Sold Stock by Size")
-plot_df = filtered_df.groupby("Size")["Sold Stock"].sum()
-fig, ax = plt.subplots()
-plot_df.plot(kind="bar", ax=ax, color="skyblue")
-ax.set_ylabel("Sold Stock")
-ax.set_title("Sold Stock by Size")
-st.pyplot(fig)
-
-# ----------------------------
-# Data Table
-# ----------------------------
-st.subheader("Filtered Data")
-st.dataframe(filtered_df)
+ import plotly.express as px
+ 
+ # Load dataset
+ 
+ df = pd.read_csv("chennai max-inventory.csv")
+ 
+ # Page config and styling
+ 
+ st.set_page_config(page_title="Max Inventory Analysis & Restocking Predictor", layout="wide")
+ st.markdown("""
+     <style>
+ @@ -14,10 +14,9 @@
+     </style>
+ """, unsafe_allow_html=True)
+ 
+ # Sidebar Filters
+ 
+ st.sidebar.header("🔍 Filter Options")
+ 
+ # Add 'All' to each filter
+ categories = ['All'] + sorted(df["Category"].dropna().unique().tolist())
+ branches = ['All'] + sorted(df["Branch Name"].dropna().unique().tolist())
+ genders = ['All'] + sorted(df["Gender"].dropna().unique().tolist())
+ @@ -28,7 +27,7 @@
+ selected_gender = st.sidebar.selectbox("Gender", options=genders)
+ selected_size = st.sidebar.selectbox("Size", options=sizes)
+ 
+ # Apply filters dynamically
+ 
+ filtered_df = df.copy()
+ 
+ if selected_category != "All":
+ @@ -40,22 +39,21 @@
+ if selected_size != "All":
+     filtered_df = filtered_df[filtered_df["Size"] == selected_size]
+ 
+ # Title and Tabs
+ 
+ st.markdown("<div class='main-title'>🛒 Max Inventory Analysis & Restocking Predictor</div>", unsafe_allow_html=True)
+ tabs = st.tabs(["📊 Dashboard", "🔁 Restocking Predictor"])
+ 
+ # ========== 📊 Dashboard ==========
+ 
+ with tabs[0]:
+     st.markdown("<div class='section-header'>📦 Inventory Overview</div>", unsafe_allow_html=True)
+ 
+     col1, col2, col3, col4 = st.columns(4)
+     col1.metric("Total Products", len(filtered_df))
+     col1.metric("Total Brand Products", len(filtered_df))
+     col2.metric("Total Available", int(filtered_df["Available Stock"].sum()))
+     col3.metric("Total Sold", int(filtered_df["Sold Stock"].sum()))
+     avg_price = filtered_df["Price"].mean() if not filtered_df.empty else 0
+     col4.metric("Average Price", f"₹{avg_price:.2f}")
+ 
+     # Bar chart: Sold stock by brand
+     if not filtered_df.empty:
+         st.markdown(f"<div class='section-header'>📈 Sold Stock by Brand</div>", unsafe_allow_html=True)
+         brand_sales = filtered_df.groupby("Brand")["Sold Stock"].sum().reset_index()
+ @@ -65,7 +63,7 @@
+     else:
+         st.info("No data available for the selected filters.")
+ 
+ # ========== 🔁 Restocking Predictor ==========
+ 
+ with tabs[1]:
+     st.markdown("<div class='section-header'>🧮 Selected Item Details</div>", unsafe_allow_html=True)
+ 
+ @@ -74,7 +72,7 @@
+ 
+         st.markdown("<div class='section-header'>📦 Restocking Prediction Results</div>", unsafe_allow_html=True)
+ 
+         # Restocking prediction logic
+         
+         def predict_restock(row):
+             threshold = 30
+             available = row["Available Stock"]
+ @@ -85,6 +83,17 @@ def predict_restock(row):
+         prediction_df = filtered_df.copy()
+         prediction_df[["Restocking Status", "Quantity to Restock"]] = prediction_df.apply(predict_restock, axis=1)
+ 
+         st.dataframe(prediction_df.reset_index(drop=True), use_container_width=True)
+        
+         def highlight_restocking_specific(s):
+             if s.name == "Restocking Status":
+                 return ['background-color: #ffcccc' if v == "Restock Needed" else 'background-color: #ccffcc' for v in s]
+             elif s.name == "Quantity to Restock":
+                 return ['background-color: #ffcccc' if v > 0 else 'background-color: #ccffcc' for v in s]
+             else:
+                 return [''] * len(s)
+ 
+         styled_df = prediction_df.style.apply(highlight_restocking_specific)
+ 
+         st.dataframe(styled_df, use_container_width=True)
+     else:
+         st.info("No item data available for the selected filters.")
