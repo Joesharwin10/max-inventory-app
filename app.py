@@ -1,4 +1,5 @@
-import pandas as pd
+import streamlit as st
+ import pandas as pd
  import plotly.express as px
  
  # Load dataset
@@ -10,7 +11,8 @@ import pandas as pd
  st.set_page_config(page_title="Max Inventory Analysis & Restocking Predictor", layout="wide")
  st.markdown("""
      <style>
- @@ -14,10 +14,9 @@
+         .main-title {font-size: 36px; font-weight: bold; margin-bottom: 10px;}
+         .section-header {font-size: 24px; font-weight: 600; margin-top: 30px; margin-bottom: 10px;}
      </style>
  """, unsafe_allow_html=True)
  
@@ -22,7 +24,10 @@ import pandas as pd
  categories = ['All'] + sorted(df["Category"].dropna().unique().tolist())
  branches = ['All'] + sorted(df["Branch Name"].dropna().unique().tolist())
  genders = ['All'] + sorted(df["Gender"].dropna().unique().tolist())
- @@ -28,7 +27,7 @@
+ sizes = ['All'] + sorted(df["Size"].dropna().unique().tolist())
+ 
+ selected_category = st.sidebar.selectbox("Category", options=categories)
+ selected_branch = st.sidebar.selectbox("Branch Name", options=branches)
  selected_gender = st.sidebar.selectbox("Gender", options=genders)
  selected_size = st.sidebar.selectbox("Size", options=sizes)
  
@@ -31,7 +36,11 @@ import pandas as pd
  filtered_df = df.copy()
  
  if selected_category != "All":
- @@ -40,22 +39,21 @@
+     filtered_df = filtered_df[filtered_df["Category"] == selected_category]
+ if selected_branch != "All":
+     filtered_df = filtered_df[filtered_df["Branch Name"] == selected_branch]
+ if selected_gender != "All":
+     filtered_df = filtered_df[filtered_df["Gender"] == selected_gender]
  if selected_size != "All":
      filtered_df = filtered_df[filtered_df["Size"] == selected_size]
  
@@ -57,7 +66,9 @@ import pandas as pd
      if not filtered_df.empty:
          st.markdown(f"<div class='section-header'>📈 Sold Stock by Brand</div>", unsafe_allow_html=True)
          brand_sales = filtered_df.groupby("Brand")["Sold Stock"].sum().reset_index()
- @@ -65,7 +63,7 @@
+         fig = px.bar(brand_sales, x="Brand", y="Sold Stock", color="Brand",
+                      title="Sold Stock by Brand", text_auto=True)
+         st.plotly_chart(fig, use_container_width=True)
      else:
          st.info("No data available for the selected filters.")
  
@@ -66,7 +77,8 @@ import pandas as pd
  with tabs[1]:
      st.markdown("<div class='section-header'>🧮 Selected Item Details</div>", unsafe_allow_html=True)
  
- @@ -74,7 +72,7 @@
+     if not filtered_df.empty:
+         st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
  
          st.markdown("<div class='section-header'>📦 Restocking Prediction Results</div>", unsafe_allow_html=True)
  
@@ -75,7 +87,10 @@ import pandas as pd
          def predict_restock(row):
              threshold = 30
              available = row["Available Stock"]
- @@ -85,6 +83,17 @@ def predict_restock(row):
+             restock_needed = "Restock Needed" if available < threshold else "Sufficient"
+             quantity = max(0, threshold - available)
+             return pd.Series([restock_needed, quantity], index=["Restocking Status", "Quantity to Restock"])
+ 
          prediction_df = filtered_df.copy()
          prediction_df[["Restocking Status", "Quantity to Restock"]] = prediction_df.apply(predict_restock, axis=1)
  
