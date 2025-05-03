@@ -7,7 +7,7 @@ st.set_page_config(page_title="Max Inventory Dashboard", layout="wide")
 # Load data
 @st.cache_data
 def load_data():
-    return pd.read_csv("Max Showroom Data.csv")
+    return pd.read_csv("chennai max-inventory.csv")
 
 df = load_data()
 
