@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 
 # Load the dataset
-df = pd.read_csv("Chennai max-inventory.csv")
+df = pd.read_csv("chennai max-inventory.csv")
 
 st.set_page_config(page_title="Max Inventory Analysis & Restocking Predictor", layout="wide")
 st.markdown("""
