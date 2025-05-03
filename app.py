@@ -1,87 +1,97 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from sklearn.linear_model import LinearRegression
-import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 
-# --- Load Data ---
+st.set_page_config(page_title="Max Inventory Dashboard", layout="wide")
+
+# Load and preprocess data
 @st.cache_data
 def load_data():
-    return pd.read_csv("Max Showroom Data.csv")
+    df = pd.read_csv("Max Showroom Data.csv")
+    df.dropna(subset=["Available Stock", "Sold Stock", "Total Items", "Target", "Price", "Restock Needed"], inplace=True)
+
+    # Normalize the Price column
+    scaler = MinMaxScaler()
+    df["Price"] = scaler.fit_transform(df[["Price"]])
+
+    return df
 
 df = load_data()
 
-# --- Page Setup ---
-st.set_page_config(layout="wide")
-st.title("🛍️ Max Showroom Inventory Dashboard & Restocking Predictor")
+# ----------------------------
+# Sidebar Filter Section
+# ----------------------------
+st.title("🛍️ Chennai Max Inventory Dashboard")
 
-# --- Sidebar Filters ---
-st.sidebar.header("🔍 Filter Options")
+st.sidebar.header("Filter Options")
+category = st.sidebar.multiselect("Category", options=df["Category"].unique())
+gender = st.sidebar.multiselect("Gender", options=df["Gender"].unique())
 
-category = st.sidebar.selectbox("Category", sorted(df["Category"].unique()))
-branch = st.sidebar.selectbox("Branch Name", sorted(df["Branch Name"].unique()))
-gender = st.sidebar.selectbox("Gender", sorted(df["Gender"].unique()))
-size = st.sidebar.selectbox("Size", sorted(df["Size"].unique()))
-brand = st.sidebar.selectbox("Brand", sorted(df["Brand"].unique()))
+filtered_df = df.copy()
+if category:
+    filtered_df = filtered_df[filtered_df["Category"].isin(category)]
+if gender:
+    filtered_df = filtered_df[filtered_df["Gender"].isin(gender)]
 
-# Apply Filters
-filtered_df = df[
-    (df["Category"] == category) &
-    (df["Branch Name"] == branch) &
-    (df["Gender"] == gender) &
-    (df["Size"] == size) &
-    (df["Brand"] == brand)
-]
-
-# --- Inventory Overview ---
-st.markdown("### 📦 Inventory Overview")
-
-col1, col2, col3, col4 = st.columns(4)
+# ----------------------------
+# Metrics
+# ----------------------------
+col1, col2, col3 = st.columns(3)
 col1.metric("Total Products", len(filtered_df))
-col2.metric("Total Available", int(filtered_df["Available Stock"].sum()))
-col3.metric("Total Sold", int(filtered_df["Sold Stock"].sum()))
-avg_price = filtered_df["Price"].mean() if not filtered_df.empty else 0
-col4.metric("Average Price", f"₹{avg_price:.2f}")
+col2.metric("Total Sold", filtered_df["Sold Stock"].sum())
+col3.metric("Average Price", f"₹{filtered_df['Price'].mean():.2f}")
 
-# --- Plot Sold Stock by Brand ---
-st.markdown("### 📊 Sold Stock by Brand (Filtered)")
+# ----------------------------
+# Model Training (from notebook logic)
+# ----------------------------
+X = df[["Available Stock", "Sold Stock", "Total Items", "Target", "Price"]]
+y = df["Restock Needed"].apply(lambda x: 1 if x > 0 else 0)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-if not filtered_df.empty:
-    chart_df = filtered_df.groupby("Brand")["Sold Stock"].sum().reset_index()
-    fig = px.bar(chart_df, x="Brand", y="Sold Stock", color="Brand", text="Sold Stock")
-    fig.update_layout(title_x=0.5, xaxis_title="Brand", yaxis_title="Sold Stock")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.warning("No data found for selected filters.")
+model = LogisticRegression(class_weight='balanced', random_state=42)
+model.fit(X_train, y_train)
 
-# --- Restocking Predictor ---
-st.markdown("### 🤖 Restocking Predictor")
+# ----------------------------
+# Restocking Predictor Section
+# ----------------------------
+st.markdown("---")
+st.header("📦 Restocking Predictor (ML Model)")
 
-if not filtered_df.empty:
-    selected_index = st.selectbox(
-        "Select a Product:",
-        filtered_df.index,
-        format_func=lambda x: f"{filtered_df.loc[x, 'Brand']} - {filtered_df.loc[x, 'Size']} (Avail: {filtered_df.loc[x, 'Available Stock']}, Sold: {filtered_df.loc[x, 'Sold Stock']})"
-    )
+col_a, col_b, col_c = st.columns(3)
+with col_a:
+    available_stock = st.number_input("Available Stock", min_value=0)
+with col_b:
+    sold_stock = st.number_input("Sold Stock", min_value=0)
+with col_c:
+    total_items = st.number_input("Total Items", min_value=0)
 
-    row = filtered_df.loc[selected_index]
+target = 100  # default business target assumption
+price = df["Price"].mean()  # average normalized price
 
-    # ML model on full dataset
-    train_df = df[df["Available Stock"] > 0][["Available Stock", "Sold Stock"]]
-    X = train_df[["Available Stock"]]
-    y = train_df["Sold Stock"]
+if st.button("Predict Restocking Need"):
+    input_data = pd.DataFrame([[available_stock, sold_stock, total_items, target, price]],
+                              columns=["Available Stock", "Sold Stock", "Total Items", "Target", "Price"])
+    prediction = model.predict(input_data)[0]
+    restock_needed = "Yes" if prediction == 1 else "No"
+    color = "green" if prediction == 1 else "red"
+    st.markdown(f"### ✅ Restocking Status: <span style='color:{color}'>{restock_needed}</span>", unsafe_allow_html=True)
 
-    model = LinearRegression()
-    model.fit(X, y)
+# ----------------------------
+# Plot Section
+# ----------------------------
+st.subheader("Sold Stock by Size")
+plot_df = filtered_df.groupby("Size")["Sold Stock"].sum()
+fig, ax = plt.subplots()
+plot_df.plot(kind="bar", ax=ax, color="skyblue")
+ax.set_ylabel("Sold Stock")
+ax.set_title("Sold Stock by Size")
+st.pyplot(fig)
 
-    predicted_sold = model.predict([[row["Available Stock"]]])[0]
-    restock_qty = max(0, int(predicted_sold - row["Available Stock"]))
-
-    st.dataframe(pd.DataFrame(row).T)
-
-    if restock_qty > 0:
-        st.success(f"🔁 Restocking Needed: {restock_qty} units")
-    else:
-        st.info("✅ Stock is Sufficient")
-else:
-    st.info("Please refine your filters to view prediction.")
+# ----------------------------
+# Data Table
+# ----------------------------
+st.subheader("Filtered Data")
+st.dataframe(filtered_df)
