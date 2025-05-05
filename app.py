@@ -86,14 +86,14 @@ with tabs[1]:
 
     if not filtered_df.empty:
         # Prepare training data
-        features = ["Available Stock", "Sold Stock", "Total Items", "Price"]
+        features = ["Available Stock", "Sold Stock", "Total Items", "Target", "Price"]
         df_model = df.copy()
 
         scaler = MinMaxScaler()
         df_model[["Price"]] = scaler.fit_transform(df_model[["Price"]])
 
         X = df_model[features]
-        y = df_model["Target"]
+        y = df_model["Restock Needed"].apply(lambda x: 1 if x > 0 else 0)
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
