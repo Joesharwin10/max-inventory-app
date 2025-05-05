@@ -56,7 +56,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Title
-st.markdown("<div class='main-title'>🛒 Max Inventory Analysis & ML-Based Restocking Predictor</div>", unsafe_allow_html=True)
+st.markdown("<div class='main-title'>🛒 Max Inventory Analysis & Restocking Prediction</div>", unsafe_allow_html=True)
 
 # Tabs
 tabs = st.tabs(["📊 Dashboard", "🔁 Restocking Predictor"])
@@ -82,7 +82,7 @@ with tabs[0]:
 
 # ========== 🔁 Restocking Predictor ==========
 with tabs[1]:
-    st.markdown("<div class='section-header'>📦 Restocking Prediction (ML-Based)</div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-header'>📦 Restocking Prediction </div>", unsafe_allow_html=True)
 
     if not filtered_df.empty:
         # Prepare training data
@@ -113,7 +113,7 @@ with tabs[1]:
         result_df["Restock Needed"] = ["Yes" if p == 1 else "No" for p in predictions]
 
         # Show result table
-        st.dataframe(result_df[["Branch Name", "Category", "Brand", "Available Stock", "Sold Stock", "Restock Needed"]], use_container_width=True)
+        st.dataframe(result_df[["Timestamp","Branch Name", "Category", "Brand", "Size","Available Stock", "Sold Stock", "Total Items","Target","Price","Restock Needed"]], use_container_width=True)
 
     else:
         st.info("No data to display. Please adjust your filters.")
