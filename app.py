@@ -133,3 +133,4 @@ with tab2:
         display_df[col] = label_encoders[col].inverse_transform(display_df[col])
     st.markdown("#### 📂 Complete Inventory Records (2023–2024)")
     st.dataframe(display_df)
+
