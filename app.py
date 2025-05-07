@@ -7,15 +7,16 @@ from sklearn.preprocessing import LabelEncoder
 
 st.set_page_config(page_title="Max Inventory 2025 Prediction", layout="wide")
 
-# Load data
+# Load and cache data
 @st.cache_data
 def load_data():
     return pd.read_csv("Max 2023-2024!.csv")
 
 df = load_data()
 
-# Add Target column
-df["Target"] = (df["Available Stock"] < df["Sold Stock"]).astype(int)
+# Drop unwanted columns
+columns_to_drop = ["Timestamp", "Restock Needed", "Data Split", "Target"]
+df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
 
 # Label Encoding
 label_cols = ["Branch Name", "Category", "Gender", "Size", "Brand", "Season", "Season Month"]
@@ -25,11 +26,18 @@ for col in label_cols:
     df[col] = le.fit_transform(df[col].astype(str))
     label_encoders[col] = le
 
+# Train model
+X = df[["Available Stock", "Sold Stock"] + label_cols]
+y = (df["Available Stock"] < df["Sold Stock"]).astype(int)  # Dynamic target
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+model = RandomForestClassifier(random_state=42)
+model.fit(X_train, y_train)
+
 # Tabs
 st.title("🛍️ Max Showroom Inventory Dashboard & 2025 Prediction")
 tab1, tab2 = st.tabs(["📊 Dashboard", "🤖 Prediction of 2025 Restocking"])
 
-# --- Tab 1: Dashboard ---
+# --- TAB 1: Dashboard ---
 with tab1:
     st.sidebar.header("🔍 Filter Options")
     filters = {}
@@ -54,95 +62,74 @@ with tab1:
     if not filtered_df.empty:
         chart_df = filtered_df.copy()
         chart_df["Brand Name"] = label_encoders["Brand"].inverse_transform(chart_df["Brand"])
-        fig = px.bar(chart_df.groupby("Brand Name")["Sold Stock"].sum().reset_index(),
-                     x="Brand Name", y="Sold Stock", color="Brand Name", title="Sold Stock by Brand")
-        st.plotly_chart(fig, use_container_width=True)
+        brand_chart = px.bar(
+            chart_df.groupby("Brand Name")["Sold Stock"].sum().reset_index(),
+            x="Brand Name", y="Sold Stock", color="Brand Name", title="Sold Stock by Brand"
+        )
+        st.plotly_chart(brand_chart, use_container_width=True)
     else:
-        st.warning("No data available. Try changing filters.")
+        st.warning("⚠️ No data available for selected filters.")
 
-# --- Tab 2: Prediction ---
+# --- TAB 2: Prediction ---
 with tab2:
-    st.subheader("🔮 Predicting on Restocking for 2025")
+    st.subheader("🔮 Predicting Restocking Requirement for 2025")
 
-    # Train model
-    X = df[["Available Stock", "Sold Stock"] + label_cols]
-    y = df["Target"]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    model = RandomForestClassifier()
-    model.fit(X_train, y_train)
-
-    # Form
     with st.form("predict_form"):
         st.markdown("### 📄 Enter Item Details")
-        branch = st.selectbox("Branch Name", label_encoders["Branch Name"].classes_)
-        category = st.selectbox("Category", label_encoders["Category"].classes_)
-        gender = st.selectbox("Gender", label_encoders["Gender"].classes_)
-        size = st.selectbox("Size", label_encoders["Size"].classes_)
-        brand = st.selectbox("Brand", label_encoders["Brand"].classes_)
-        season = st.selectbox("Season", label_encoders["Season"].classes_)
-        season_month = st.selectbox("Season Month", label_encoders["Season Month"].classes_)
+
+        form_inputs = {}
+        for col in label_cols:
+            label = col.replace("_", " ")
+            form_inputs[col] = st.selectbox(label, label_encoders[col].classes_)
+
         available_stock = st.number_input("Available Stock", min_value=0, value=0)
         sold_stock = st.number_input("Sold Stock", min_value=0, value=0)
+
         submit = st.form_submit_button("Predict")
 
     if submit:
-        input_row = {
+        input_data = {
             "Available Stock": available_stock,
-            "Sold Stock": sold_stock,
-            "Branch Name": label_encoders["Branch Name"].transform([branch])[0],
-            "Category": label_encoders["Category"].transform([category])[0],
-            "Gender": label_encoders["Gender"].transform([gender])[0],
-            "Size": label_encoders["Size"].transform([size])[0],
-            "Brand": label_encoders["Brand"].transform([brand])[0],
-            "Season": label_encoders["Season"].transform([season])[0],
-            "Season Month": label_encoders["Season Month"].transform([season_month])[0],
+            "Sold Stock": sold_stock
         }
+        for col in label_cols:
+            input_data[col] = label_encoders[col].transform([form_inputs[col]])[0]
 
-        input_df = pd.DataFrame([input_row])
+        input_df = pd.DataFrame([input_data])
         prediction = model.predict(input_df)[0]
 
-        st.markdown(f"### 🧾 Prediction for {category} - {brand} ({size}, {gender}) at {branch} for **{season_month}**")
-
+        st.markdown("### 🧾 Prediction Result")
+        summary = f"**{form_inputs['Category']} - {form_inputs['Brand']} ({form_inputs['Size']}, {form_inputs['Gender']})** at **{form_inputs['Branch Name']}** for **{form_inputs['Season Month']}**"
         if prediction == 1:
-            qty = max(int(sold_stock - available_stock), 1)
-            st.success(f"⚠️ The month of (**{season_month}**) restocking is **needed** – Suggested Quantity: **{qty}** items")
+            suggested_qty = max(int(sold_stock - available_stock), 1)
+            st.success(f"⚠️ Restocking is **needed** for {summary} – Suggested Quantity: **{suggested_qty}** items")
         else:
-            st.info(f"✅ The month of (**{season_month}**) restocking is **not needed**.")
+            st.info(f"✅ Restocking is **not needed** for {summary}")
 
-        matched_df = df[
-            (df["Branch Name"] == input_row["Branch Name"]) &
-            (df["Category"] == input_row["Category"]) &
-            (df["Gender"] == input_row["Gender"]) &
-            (df["Size"] == input_row["Size"]) &
-            (df["Brand"] == input_row["Brand"]) &
-            (df["Season"] == input_row["Season"]) &
-            (df["Season Month"] == input_row["Season Month"]) &
-            (df["Available Stock"] == available_stock) &
-            (df["Sold Stock"] == sold_stock)
+        # Matching Past Records
+        matched_df = df.copy()
+        for col in label_cols:
+            matched_df = matched_df[matched_df[col] == input_data[col]]
+        matched_df = matched_df[
+            (matched_df["Available Stock"] == available_stock) &
+            (matched_df["Sold Stock"] == sold_stock)
         ]
 
-        if not matched_df.empty:
-            st.success("✅ Exact matching records found below:")
-        else:
-            st.warning("⚠️ No exact past records found. Table shown for manual verification.")
-
-        matched_display_df = matched_df.copy()
+        # Decode matched records
         for col in label_cols:
-            matched_display_df[col] = label_encoders[col].inverse_transform(matched_display_df[col])
+            matched_df[col] = label_encoders[col].inverse_transform(matched_df[col])
+
+        if not matched_df.empty:
+            st.success("✅ Matching historical records found:")
+        else:
+            st.warning("⚠️ No exact match found. Showing possible related records.")
 
         st.markdown("#### 📌 Matching Records")
-        st.dataframe(matched_display_df[[
-            "Timestamp", "Branch Name", "Category", "Brand", "Size", "Gender",
-            "Season", "Season Month", "Available Stock", "Sold Stock"
-        ]])
+        st.dataframe(matched_df)
 
-    # Full inventory (shown after prediction section)
+    # --- Show All Data (excluding removed columns) ---
     display_df = df.copy()
     for col in label_cols:
         display_df[col] = label_encoders[col].inverse_transform(display_df[col])
-
-    st.markdown("#### 📂 Inventory Past Data (with Timestamp)")
-    st.dataframe(display_df[[
-        "Timestamp", "Branch Name", "Category", "Brand", "Size", "Gender",
-        "Season", "Season Month", "Available Stock", "Sold Stock"
-    ]])
+    st.markdown("#### 📂 Complete Inventory Records (2023–2024)")
+    st.dataframe(display_df)
