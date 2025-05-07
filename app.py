@@ -14,7 +14,7 @@ def load_data():
 
 df = load_data()
 
-# Add Target
+# Add Target column
 df["Target"] = (df["Available Stock"] < df["Sold Stock"]).astype(int)
 
 # Label Encoding
@@ -27,7 +27,7 @@ for col in label_cols:
 
 # Tabs
 st.title("🛍️ Max Showroom Inventory Dashboard & 2025 Prediction")
-tab1, tab2 = st.tabs(["📊 Dashboard", "🤖 Prediction of  2025 Restocking"])
+tab1, tab2 = st.tabs(["📊 Dashboard", "🤖 Prediction of 2025 Restocking"])
 
 # --- Tab 1: Dashboard ---
 with tab1:
@@ -39,7 +39,7 @@ with tab1:
         filters[col] = selected
 
     filtered_df = df.copy()
-    for col in ["Branch Name", "Category", "Gender", "Size", "Brand"]:
+    for col in filters:
         if filters[col] != "All":
             val = label_encoders[col].transform([filters[col]])[0]
             filtered_df = filtered_df[filtered_df[col] == val]
@@ -62,7 +62,7 @@ with tab1:
 
 # --- Tab 2: Prediction ---
 with tab2:
-    st.subheader("🔮 Predicting on  Restocking for 2025")
+    st.subheader("🔮 Predicting on Restocking for 2025")
 
     # Train model
     X = df[["Available Stock", "Sold Stock"] + label_cols]
@@ -85,17 +85,6 @@ with tab2:
         sold_stock = st.number_input("Sold Stock", min_value=0, value=0)
         submit = st.form_submit_button("Predict")
 
-    # Show full inventory data with Timestamp
-    display_df = df.copy()
-    for col in label_cols:
-        display_df[col] = label_encoders[col].inverse_transform(display_df[col])
-
-    st.markdown("#### 📂 Inventory Past Data (with Timestamp)")
-    st.dataframe(display_df[[
-        "Timestamp", "Branch Name", "Category", "Brand", "Size", "Gender",
-        "Season", "Season Month", "Available Stock", "Sold Stock"
-    ]])
-
     if submit:
         input_row = {
             "Available Stock": available_stock,
@@ -109,6 +98,17 @@ with tab2:
             "Season Month": label_encoders["Season Month"].transform([season_month])[0],
         }
 
+        input_df = pd.DataFrame([input_row])
+        prediction = model.predict(input_df)[0]
+
+        st.markdown(f"### 🧾 Prediction for {category} - {brand} ({size}, {gender}) at {branch} for **{season_month}**")
+
+        if prediction == 1:
+            qty = max(int(sold_stock - available_stock), 1)
+            st.success(f"⚠️ The month of (**{season_month}**) restocking is **needed** – Suggested Quantity: **{qty}** items")
+        else:
+            st.info(f"✅ The month of (**{season_month}**) restocking is **not needed**.")
+
         matched_df = df[
             (df["Branch Name"] == input_row["Branch Name"]) &
             (df["Category"] == input_row["Category"]) &
@@ -121,17 +121,6 @@ with tab2:
             (df["Sold Stock"] == sold_stock)
         ]
 
-        input_df = pd.DataFrame([input_row])
-        prediction = model.predict(input_df)[0]
-
-        st.markdown(f"### 🧾 Prediction for {category} - {brand} ({size}, {gender}) at {branch} for **{season_month}**")
-
-        if prediction == 1:
-            qty = max(int(sold_stock - available_stock), 1)
-            st.success(f"⚠️ The month of (**{season_month}**) restocking is **needed** – Suggested Quantity: **{qty}** items")
-        else:
-            st.info(f"✅ The month of (**{season_month}**) restocking is **not needed**.")
-
         if not matched_df.empty:
             st.success("✅ Exact matching records found below:")
         else:
@@ -141,7 +130,19 @@ with tab2:
         for col in label_cols:
             matched_display_df[col] = label_encoders[col].inverse_transform(matched_display_df[col])
 
+        st.markdown("#### 📌 Matching Records")
         st.dataframe(matched_display_df[[
             "Timestamp", "Branch Name", "Category", "Brand", "Size", "Gender",
             "Season", "Season Month", "Available Stock", "Sold Stock"
         ]])
+
+    # Full inventory (shown after prediction section)
+    display_df = df.copy()
+    for col in label_cols:
+        display_df[col] = label_encoders[col].inverse_transform(display_df[col])
+
+    st.markdown("#### 📂 Inventory Past Data (with Timestamp)")
+    st.dataframe(display_df[[
+        "Timestamp", "Branch Name", "Category", "Brand", "Size", "Gender",
+        "Season", "Season Month", "Available Stock", "Sold Stock"
+    ]])
