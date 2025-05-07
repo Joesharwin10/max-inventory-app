@@ -26,8 +26,8 @@ for col in label_cols:
     label_encoders[col] = le
 
 # Tabs
-st.title("🛍️ Max Showroom Inventory Dashboard & 2025 Predictor")
-tab1, tab2 = st.tabs(["📊 Dashboard", "🤖 Predict 2025 Restocking"])
+st.title("🛍️ Max Showroom Inventory Dashboard & 2025 Prediction")
+tab1, tab2 = st.tabs(["📊 Dashboard", "🤖 Prediction of  2025 Restocking"])
 
 # --- Tab 1: Dashboard ---
 with tab1:
