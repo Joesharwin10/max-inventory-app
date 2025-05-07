@@ -62,7 +62,7 @@ with tab1:
 
 # --- Tab 2: Prediction ---
 with tab2:
-    st.subheader("🔮 Predict Restocking for 2025")
+    st.subheader("🔮 Predicting on  Restocking for 2025")
 
     # Train model
     X = df[["Available Stock", "Sold Stock"] + label_cols]
