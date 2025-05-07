@@ -1,119 +1,118 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 
-# Page configuration
-st.set_page_config(page_title="Max Inventory Dashboard", layout="wide")
+# Set page config
+st.set_page_config(page_title="Max Inventory 2025 Predictor", layout="wide")
 
 # Load data
 @st.cache_data
 def load_data():
-    return pd.read_csv("Max Showroom Data.csv")
+    return pd.read_csv("Max 2023-2024.csv")
 
 df = load_data()
 
-# Data preprocessing (consistent with notebook)
+# Preprocessing
 df["Total Items"] = df["Available Stock"] + df["Sold Stock"]
-df["Target"] = df["Available Stock"] < df["Sold Stock"]
-df["Target"] = df["Target"].astype(int)
+df["Target"] = (df["Available Stock"] < df["Sold Stock"]).astype(int)
 
-# Sidebar filters
+# Encode categorical variables
+label_cols = ["Branch Name", "Category", "Gender", "Size", "Brand"]
+label_encoders = {}
+for col in label_cols:
+    le = LabelEncoder()
+    df[col] = le.fit_transform(df[col].astype(str))
+    label_encoders[col] = le
+
+# Sidebar filter for Dashboard
 st.sidebar.header("🔍 Filter Options")
-categories = ['All'] + sorted(df["Category"].dropna().unique())
-branches = ['All'] + sorted(df["Branch Name"].dropna().unique())
-genders = ['All'] + sorted(df["Gender"].dropna().unique())
-brands = ['All'] + sorted(df["Brand"].dropna().unique())
-sizes = ['All'] + sorted(df["Size"].dropna().unique())
+filters = {}
+for col in label_cols:
+    options = ["All"] + sorted(list(label_encoders[col].classes_))
+    selected = st.sidebar.selectbox(col, options)
+    filters[col] = selected
 
-selected_category = st.sidebar.selectbox("Category", categories)
-selected_branch = st.sidebar.selectbox("Branch Name", branches)
-selected_gender = st.sidebar.selectbox("Gender", genders)
-selected_brand = st.sidebar.selectbox("Brand", brands)
-selected_size = st.sidebar.selectbox("Size", sizes)
-
-# Filter data
+# Apply filters
 filtered_df = df.copy()
-if selected_category != 'All':
-    filtered_df = filtered_df[filtered_df['Category'] == selected_category]
-if selected_branch != 'All':
-    filtered_df = filtered_df[filtered_df['Branch Name'] == selected_branch]
-if selected_gender != 'All':
-    filtered_df = filtered_df[filtered_df['Gender'] == selected_gender]
-if selected_brand != 'All':
-    filtered_df = filtered_df[filtered_df['Brand'] == selected_brand]
-if selected_size != 'All':
-    filtered_df = filtered_df[filtered_df['Size'] == selected_size]
+for col in label_cols:
+    if filters[col] != "All":
+        encoded_val = label_encoders[col].transform([filters[col]])[0]
+        filtered_df = filtered_df[filtered_df[col] == encoded_val]
 
-# Apply styles
-st.markdown("""
-    <style>
-        .main-title {font-size: 36px; font-weight: bold; margin-bottom: 10px;}
-        .section-header {font-size: 24px; font-weight: 600; margin-top: 30px; margin-bottom: 10px;}
-    </style>
-""", unsafe_allow_html=True)
+# Layout & tabs
+st.title("🛍️ Max Showroom Inventory Dashboard & 2025 Predictor")
+tab1, tab2 = st.tabs(["📊 Dashboard", "🤖 Predict 2025 Restocking"])
 
-# Title
-st.markdown("<div class='main-title'>🛒 Max Inventory Analysis & Restocking Prediction</div>", unsafe_allow_html=True)
-
-# Tabs
-tabs = st.tabs(["📊 Dashboard", "🔁 Restocking Predictor"])
-
-# ========== 📊 Dashboard ==========
-with tabs[0]:
-    st.markdown("<div class='section-header'>📦 Inventory Overview</div>", unsafe_allow_html=True)
-
+# Dashboard tab (2023–2024)
+with tab1:
+    st.subheader("📦 Inventory Overview (2023–2024)")
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Products", len(filtered_df))
+    col1.metric("Total Entries", len(filtered_df))
     col2.metric("Available Stock", int(filtered_df["Available Stock"].sum()))
     col3.metric("Sold Stock", int(filtered_df["Sold Stock"].sum()))
-    avg_price = filtered_df["Price"].mean() if not filtered_df.empty else 0
-    col4.metric("Avg. Price", f"₹{avg_price:.2f}")
+    col4.metric("Avg. Price", f"₹{filtered_df['Price'].mean():.2f}")
 
     if not filtered_df.empty:
-        st.markdown("<div class='section-header'>📈 Sold Stock by Brand</div>", unsafe_allow_html=True)
-        brand_chart = filtered_df.groupby("Brand")["Sold Stock"].sum().reset_index()
-        fig = px.bar(brand_chart, x="Brand", y="Sold Stock", color="Brand", title="Sold Stock by Brand", text_auto=True)
+        chart_data = filtered_df.copy()
+        chart_data["Brand Name"] = label_encoders["Brand"].inverse_transform(chart_data["Brand"])
+        fig = px.bar(chart_data.groupby("Brand Name")["Sold Stock"].sum().reset_index(),
+                     x="Brand Name", y="Sold Stock", color="Brand Name", title="Sold Stock by Brand")
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No data available for selected filters.")
+        st.warning("No data to display. Try changing filters.")
 
-# ========== 🔁 Restocking Predictor ==========
-with tabs[1]:
-    st.markdown("<div class='section-header'>📦 Restocking Prediction </div>", unsafe_allow_html=True)
+# Prediction tab (2025)
+with tab2:
+    st.subheader("🔮 Predict Restocking Need for 2025")
 
-    if not filtered_df.empty:
-        # Prepare training data
-        features = ["Available Stock", "Sold Stock", "Total Items", "Target", "Price"]
-        df_model = df.copy()
+    # Train-test split
+    features = ["Available Stock", "Sold Stock", "Total Items", "Price"] + label_cols
+    X = df[features]
+    y = df["Target"]
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        scaler = MinMaxScaler()
-        df_model[["Price"]] = scaler.fit_transform(df_model[["Price"]])
+    # Train model
+    model = RandomForestClassifier(random_state=42)
+    model.fit(X_train, y_train)
 
-        X = df_model[features]
-        y = df_model["Restock Needed"].apply(lambda x: 1 if x > 0 else 0)
+    # Form inputs
+    with st.form("predict_form"):
+        st.markdown("### 📄 Enter Item Details")
+        branch = st.selectbox("Branch Name", label_encoders["Branch Name"].classes_)
+        category = st.selectbox("Category", label_encoders["Category"].classes_)
+        gender = st.selectbox("Gender", label_encoders["Gender"].classes_)
+        size = st.selectbox("Size", label_encoders["Size"].classes_)
+        brand = st.selectbox("Brand", label_encoders["Brand"].classes_)
+        available_stock = st.number_input("Available Stock", min_value=0, value=0)
+        sold_stock = st.number_input("Sold Stock", min_value=0, value=0)
+        price = st.number_input("Price", min_value=0.0, value=0.0, format="%.2f")
 
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        submitted = st.form_submit_button("Predict Restocking Need")
 
-        model = LogisticRegression()
-        model.fit(X_train, y_train)
+    if submitted:
+        total_items = available_stock + sold_stock
+        st.write(f"**Total Items**: {total_items}")
 
-        # Apply same scaling to filtered data
-        filtered_df_copy = filtered_df.copy()
-        filtered_df_copy["Total Items"] = filtered_df_copy["Available Stock"] + filtered_df_copy["Sold Stock"]
-        filtered_df_copy[["Price"]] = scaler.transform(filtered_df_copy[["Price"]])
+        input_dict = {
+            "Available Stock": available_stock,
+            "Sold Stock": sold_stock,
+            "Total Items": total_items,
+            "Price": price,
+            "Branch Name": label_encoders["Branch Name"].transform([branch])[0],
+            "Category": label_encoders["Category"].transform([category])[0],
+            "Gender": label_encoders["Gender"].transform([gender])[0],
+            "Size": label_encoders["Size"].transform([size])[0],
+            "Brand": label_encoders["Brand"].transform([brand])[0],
+        }
 
-        # Predict
-        X_filtered = filtered_df_copy[features]
-        predictions = model.predict(X_filtered)
+        input_df = pd.DataFrame([input_dict])
+        prediction = model.predict(input_df[features])[0]
 
-        result_df = filtered_df.copy()
-        result_df["Restock Needed"] = ["Yes" if p == 1 else "No" for p in predictions]
-
-        # Show result table
-        st.dataframe(result_df[["Timestamp","Branch Name", "Category", "Brand", "Size","Available Stock", "Sold Stock", "Total Items","Target","Price","Restock Needed"]], use_container_width=True)
-
-    else:
-        st.info("No data to display. Please adjust your filters.")
+        st.markdown(f"### 🧾 Prediction Result for {brand} - {category} ({size}, {gender}) at {branch}:")
+        if prediction == 1:
+            st.success("✅ Restocking **Needed** for 2025")
+        else:
+            st.info("🟢 Restocking **Not Needed** for 2025")
