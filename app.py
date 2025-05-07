@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-st.set_page_config(page_title="Max Inventory 2025 Predictor", layout="wide")
+st.set_page_config(page_title="Max Inventory 2025 Prediction", layout="wide")
 
 # Load data
 @st.cache_data
